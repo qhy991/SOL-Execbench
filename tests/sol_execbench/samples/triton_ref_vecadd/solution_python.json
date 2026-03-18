@@ -1,0 +1,17 @@
+{
+  "name": "triton_ref_vecadd_torch",
+  "definition": "vecadd",
+  "author": "test",
+  "spec": {
+    "languages": ["pytorch"],
+    "target_hardware": ["LOCAL"],
+    "entry_point": "kernel.py::run",
+    "destination_passing_style": false
+  },
+  "sources": [
+    {
+      "path": "kernel.py",
+      "content": "import torch\n\ndef run(x, y):\n    return x + y\n"
+    }
+  ]
+}

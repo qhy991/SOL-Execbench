@@ -1,0 +1,19 @@
+{
+  "name": "triton_ref_vecadd",
+  "description": "Simple vector addition with a @triton.jit reference implementation. Regression test for eval_driver reference loading: decorators that call inspect.getsourcelines() (such as @triton.jit) require the reference code to live in a real file.",
+  "axes": {
+    "n": {
+      "type": "const",
+      "value": 1024,
+      "description": "Vector length"
+    }
+  },
+  "inputs": {
+    "x": {"shape": ["n"], "dtype": "float32", "description": "First input vector"},
+    "y": {"shape": ["n"], "dtype": "float32", "description": "Second input vector"}
+  },
+  "outputs": {
+    "z": {"shape": ["n"], "dtype": "float32", "description": "Element-wise sum"}
+  },
+  "reference": "import torch\nimport triton\nimport triton.language as tl\n\n@triton.jit\ndef _vecadd_kernel(x_ptr, y_ptr, z_ptr, n, BLOCK: tl.constexpr):\n    pid = tl.program_id(0)\n    offs = pid * BLOCK + tl.arange(0, BLOCK)\n    mask = offs < n\n    x = tl.load(x_ptr + offs, mask=mask)\n    y = tl.load(y_ptr + offs, mask=mask)\n    tl.store(z_ptr + offs, x + y, mask=mask)\n\ndef run(x, y):\n    z = torch.empty_like(x)\n    n = x.numel()\n    _vecadd_kernel[(n + 255) // 256,](x, y, z, n, BLOCK=256)\n    return z\n"
+}

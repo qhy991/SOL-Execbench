@@ -1,0 +1,20 @@
+{
+  "name": "linear_backward",
+  "op_type": "backward",
+  "axes": {
+    "M": {"type": "var"},
+    "N": {"type": "var"},
+    "K": {"type": "var"}
+  },
+  "custom_inputs_entrypoint": "generate_inputs",
+  "inputs": {
+    "grad_output": {"shape": ["M", "N"], "dtype": "float32"},
+    "x": {"shape": ["M", "K"], "dtype": "float32"},
+    "weight": {"shape": ["N", "K"], "dtype": "float32"}
+  },
+  "outputs": {
+    "grad_input": {"shape": ["M", "K"], "dtype": "float32"},
+    "grad_weight": {"shape": ["N", "K"], "dtype": "float32"}
+  },
+  "reference": "import torch\n\ndef generate_inputs(axes_and_scalars, device):\n    M = axes_and_scalars['M']\n    N = axes_and_scalars['N']\n    K = axes_and_scalars['K']\n    grad_output = torch.randn(M, N, dtype=torch.float32, device=device) / N ** 0.5\n    x = torch.randn(M, K, dtype=torch.float32, device=device) / K ** 0.5\n    weight = torch.randn(N, K, dtype=torch.float32, device=device) / K ** 0.5\n    return {'grad_output': grad_output, 'x': x, 'weight': weight}\n\n@torch.no_grad()\ndef run(grad_output, x, weight):\n    grad_input = grad_output @ weight\n    grad_weight = grad_output.mT @ x\n    return grad_input, grad_weight\n"
+}

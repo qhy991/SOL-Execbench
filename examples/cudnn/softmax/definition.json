@@ -1,0 +1,32 @@
+{
+  "name": "softmax_h4096",
+  "op_type": "softmax",
+  "description": "Softmax along the last dimension with hidden_size=4096. Common in transformer attention score computation.",
+  "axes": {
+    "batch_size": {
+      "type": "var",
+      "description": "Batch dimension"
+    },
+    "hidden_size": {
+      "type": "const",
+      "value": 4096,
+      "description": "Feature dimension"
+    }
+  },
+  "custom_inputs_entrypoint": null,
+  "inputs": {
+    "input": {
+      "shape": ["batch_size", "hidden_size"],
+      "dtype": "float32",
+      "description": "Input logits"
+    }
+  },
+  "outputs": {
+    "output": {
+      "shape": ["batch_size", "hidden_size"],
+      "dtype": "float32",
+      "description": "Softmax probabilities"
+    }
+  },
+  "reference": "import torch\n\n@torch.no_grad()\ndef run(input):\n    return torch.softmax(input, dim=-1)"
+}

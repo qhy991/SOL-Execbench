@@ -1,0 +1,33 @@
+{
+  "name": "cutlass_gemm_example",
+  "definition": "gemm_n4096_k4096",
+  "author": "example",
+  "spec": {
+    "languages": ["cutlass"],
+    "target_hardware": ["B200", "LOCAL"],
+    "entry_point": "main.cpp::run",
+    "dependencies": [],
+    "destination_passing_style": false,
+    "binding": "torch",
+    "compile_options": {
+      "cflags": ["-std=c++17"],
+      "cuda_cflags": ["-std=c++17"],
+      "ld_flags": []
+    }
+  },
+  "sources": [
+    {
+      "path": "kernel.h",
+      "content": "#pragma once\n\n#include <torch/extension.h>\n\nvoid gemm_launcher(\n    torch::Tensor& C,\n    const torch::Tensor& A,\n    const torch::Tensor& B,\n    cudaStream_t s);\n"
+    },
+    {
+      "path": "kernel.cu",
+      "content": "#include \"kernel.h\"\n\n#include <cutlass/gemm/device/gemm.h>\n\nusing ColumnMajor = cutlass::layout::ColumnMajor;\n\nusing CutlassGemm = cutlass::gemm::device::Gemm<float,        // Data-type of A matrix\n                                                ColumnMajor,  // Layout of A matrix\n                                                float,        // Data-type of B matrix\n                                                ColumnMajor,  // Layout of B matrix\n                                                float,        // Data-type of C matrix\n                                                ColumnMajor>; // Layout of C matrix\n\nvoid gemm_launcher(\n    torch::Tensor& C,\n    const torch::Tensor& A,\n    const torch::Tensor& B,\n    cudaStream_t s) {\n\n    // PyTorch stores tensors row-major.  CUTLASS uses column-major.\n    // row-major C(M,N) = A(M,K) @ B(K,N)\n    //   is equivalent to\n    // col-major C^T(N,M) = B^T(N,K) @ A^T(K,M)\n    int M = A.size(0);\n    int K = A.size(1);\n    int N = B.size(1);\n\n    float const* A_ptr = A.data_ptr<float>();\n    float const* B_ptr = B.data_ptr<float>();\n    float* C_ptr = C.data_ptr<float>();\n\n    CutlassGemm gemm_operator;\n\n    CutlassGemm::Arguments args(\n        {N, M, K},           // Gemm problem dimensions (swapped M,N)\n        {B_ptr, N},          // Tensor-ref for B^T (acts as A in col-major), lda=N\n        {A_ptr, K},          // Tensor-ref for A^T (acts as B in col-major), ldb=K\n        {C_ptr, N},          // Tensor-ref for source C^T, ldc=N\n        {C_ptr, N},          // Tensor-ref for destination D^T, ldd=N\n        {1.0f, 0.0f});       // Scalars: alpha, beta\n\n    cutlass::Status status = gemm_operator(args, nullptr, s);\n    TORCH_CHECK(status == cutlass::Status::kSuccess,\n        \"CUTLASS GEMM failed: \", cutlassGetStatusString(status));\n}\n"
+    },
+    {
+      "path": "main.cpp",
+      "content": "#include <torch/extension.h>\n#include <ATen/cuda/CUDAContext.h>\n#include \"kernel.h\"\n\ntorch::Tensor run(const torch::Tensor& A, const torch::Tensor& B) {\n    TORCH_CHECK(A.dim() == 2 && B.dim() == 2, \"inputs must be 2D\");\n    TORCH_CHECK(A.size(1) == B.size(0), \"inner dimensions must match\");\n    TORCH_CHECK(A.is_cuda() && B.is_cuda(), \"inputs must be CUDA tensors\");\n    TORCH_CHECK(A.scalar_type() == torch::kFloat32, \"A must be float32\");\n    TORCH_CHECK(B.scalar_type() == torch::kFloat32, \"B must be float32\");\n    TORCH_CHECK(A.is_contiguous() && B.is_contiguous(), \"inputs must be contiguous\");\n\n    auto C = torch::empty({A.size(0), B.size(1)}, A.options());\n    cudaStream_t current = at::cuda::getCurrentCUDAStream();\n    gemm_launcher(C, A, B, current);\n    return C;\n}\n\nPYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {\n    m.def(\"run\", &run, \"CUTLASS GEMM\");\n}\n"
+    }
+  ],
+  "description": "CUTLASS GEMM example following the official basic_gemm pattern. Uses float32 with ColumnMajor layout. Computes C = A @ B via the row-major to column-major transpose trick."
+}

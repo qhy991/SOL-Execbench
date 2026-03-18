@@ -1,0 +1,18 @@
+{
+  "name": "custom_matmul",
+  "op_type": "matmul",
+  "axes": {
+    "M": {"type": "var"},
+    "K": {"type": "var"},
+    "N": {"type": "var"}
+  },
+  "custom_inputs_entrypoint": "generate_inputs",
+  "inputs": {
+    "A": {"shape": ["M", "K"], "dtype": "float32", "description": "Left matrix"},
+    "B": {"shape": ["K", "N"], "dtype": "float32", "description": "Right matrix"}
+  },
+  "outputs": {
+    "C": {"shape": ["M", "N"], "dtype": "float32", "description": "Result matrix"}
+  },
+  "reference": "import torch\n\ndef generate_inputs(axes_and_scalars, device):\n    M = axes_and_scalars['M']\n    K = axes_and_scalars['K']\n    N = axes_and_scalars['N']\n    A = torch.randn(M, K, dtype=torch.float32, device=device) / K ** 0.5\n    B = torch.randn(K, N, dtype=torch.float32, device=device) / K ** 0.5\n    return {'A': A, 'B': B}\n\n@torch.no_grad()\ndef run(A, B):\n    return A @ B\n"
+}

@@ -1,0 +1,25 @@
+{
+  "name": "cudnn_softmax_example",
+  "definition": "softmax_h4096",
+  "author": "example",
+  "spec": {
+    "languages": ["cudnn"],
+    "target_hardware": ["B200", "LOCAL"],
+    "entry_point": "main.cu::run",
+    "dependencies": ["cudnn"],
+    "destination_passing_style": false,
+    "binding": "torch",
+    "compile_options": {
+      "cflags": [],
+      "cuda_cflags": [],
+      "ld_flags": ["-lcudnn"]
+    }
+  },
+  "sources": [
+    {
+      "path": "main.cu",
+      "content": "#include <torch/extension.h>\n#include <ATen/cuda/CUDAContext.h>\n#include <cudnn.h>\n#include <stdexcept>\n#include <string>\n\n#define CUDNN_CHECK(expr)                                                  \\\n    do {                                                                   \\\n        cudnnStatus_t _status = (expr);                                    \\\n        if (_status != CUDNN_STATUS_SUCCESS) {                             \\\n            throw std::runtime_error(                                      \\\n                std::string(\"cuDNN error: \") + cudnnGetErrorString(_status)); \\\n        }                                                                  \\\n    } while (0)\n\ntorch::Tensor run(const torch::Tensor& input) {\n    TORCH_CHECK(input.is_cuda(), \"input must be a CUDA tensor\");\n    TORCH_CHECK(input.is_contiguous(), \"input must be contiguous\");\n    TORCH_CHECK(input.dim() == 2, \"input must be 2D\");\n    TORCH_CHECK(input.scalar_type() == torch::kFloat32, \"input must be float32\");\n\n    int batch_size = input.size(0);\n    int hidden_size = input.size(1);\n\n    auto output = torch::empty_like(input);\n\n    cudnnHandle_t handle;\n    CUDNN_CHECK(cudnnCreate(&handle));\n    CUDNN_CHECK(cudnnSetStream(handle, at::cuda::getCurrentCUDAStream()));\n\n    cudnnTensorDescriptor_t desc;\n    CUDNN_CHECK(cudnnCreateTensorDescriptor(&desc));\n    CUDNN_CHECK(cudnnSetTensor4dDescriptor(\n        desc, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,\n        batch_size, hidden_size, 1, 1));\n\n    float alpha = 1.0f, beta = 0.0f;\n    CUDNN_CHECK(cudnnSoftmaxForward(\n        handle,\n        CUDNN_SOFTMAX_ACCURATE,\n        CUDNN_SOFTMAX_MODE_INSTANCE,\n        &alpha, desc, input.data_ptr<float>(),\n        &beta, desc, output.data_ptr<float>()));\n\n    CUDNN_CHECK(cudnnDestroyTensorDescriptor(desc));\n    CUDNN_CHECK(cudnnDestroy(handle));\n\n    return output;\n}\n\nPYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {\n    m.def(\"run\", &run, \"cuDNN Softmax forward\");\n}\n"
+    }
+  ],
+  "description": "cuDNN softmax example using cudnnSoftmaxForward with ACCURATE algorithm. Computes softmax along the feature dimension."
+}

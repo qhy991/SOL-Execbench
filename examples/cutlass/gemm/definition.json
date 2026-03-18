@@ -1,0 +1,42 @@
+{
+  "name": "gemm_n4096_k4096",
+  "op_type": "gemm",
+  "description": "Matrix multiply C = A @ B with N=K=4096. Models a typical transformer linear projection layer.",
+  "axes": {
+    "M": {
+      "type": "var",
+      "description": "Batch/sequence dimension"
+    },
+    "N": {
+      "type": "const",
+      "value": 4096,
+      "description": "Output features"
+    },
+    "K": {
+      "type": "const",
+      "value": 4096,
+      "description": "Input features"
+    }
+  },
+  "custom_inputs_entrypoint": null,
+  "inputs": {
+    "A": {
+      "shape": ["M", "K"],
+      "dtype": "float32",
+      "description": "Input activation matrix"
+    },
+    "B": {
+      "shape": ["K", "N"],
+      "dtype": "float32",
+      "description": "Weight matrix"
+    }
+  },
+  "outputs": {
+    "C": {
+      "shape": ["M", "N"],
+      "dtype": "float32",
+      "description": "Output matrix"
+    }
+  },
+  "reference": "import torch\n\n@torch.no_grad()\ndef run(A, B):\n    return torch.mm(A, B)"
+}

@@ -1,0 +1,3 @@
+{"axes": {}, "inputs": {"x": {"type": "random"}, "y": {"type": "random"}}, "uuid": "triton-ref-vecadd-001"}
+{"axes": {}, "inputs": {"x": {"type": "random"}, "y": {"type": "random"}}, "uuid": "triton-ref-vecadd-002"}
+{"axes": {}, "inputs": {"x": {"type": "random"}, "y": {"type": "random"}}, "uuid": "triton-ref-vecadd-003"}

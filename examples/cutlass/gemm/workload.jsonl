@@ -1,0 +1,3 @@
+{"uuid": "a1b2c3d4-0001-4000-8000-000000000001", "axes": {"M": 16}, "inputs": {"A": {"type": "random"}, "B": {"type": "random"}}}
+{"uuid": "a1b2c3d4-0002-4000-8000-000000000002", "axes": {"M": 64}, "inputs": {"A": {"type": "random"}, "B": {"type": "random"}}}
+{"uuid": "a1b2c3d4-0003-4000-8000-000000000003", "axes": {"M": 2048}, "inputs": {"A": {"type": "random"}, "B": {"type": "random"}}}
