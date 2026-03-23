@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sol-execbench"
-version = "1.0.0"
+version = "1.0.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,6 +20,8 @@ dependencies = [
     "click>=8.0",
     "rich>=13.0",
     "datasets>=4.8.2",
+    "torch-c-dlpack-ext>=0.1.5",
+    "apache-tvm-ffi>=0.1.9",
 ]
 
 [project.scripts]
