@@ -9,12 +9,11 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "torch>=2.10.0",
-    "torchvision>=0.24.1",
+    "torch>=2.6.0",
+    "torchvision>=0.21.0",
     "ninja>=1.13.0",
     "cuda-tile==1.1.0",
     "nvidia-cudnn-frontend==1.18.0",
-    "nvidia-cutlass-dsl[cu13]==4.4.1",
     "pydantic>=2.12.5",
     "safetensors>=0.7.0",
     "click>=8.0",
@@ -31,6 +30,9 @@ sol-execbench = "sol_execbench.cli:cli"
 dev = [
     "pytest>=9.0.2",
     "pytest-xdist>=3.5",
+]
+cutlass = [
+    "nvidia-cutlass-dsl[cu13]==4.4.1",
 ]
 
 [tool.pytest.ini_options]
@@ -58,15 +60,15 @@ exclude = [
 ignore = ["E741"]
 
 [[tool.uv.index]]
-name = "pytorch-cu130"
-url = "https://download.pytorch.org/whl/cu130"
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
 [tool.uv.sources]
 torch = [
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 torchvision = [
-  { index = "pytorch-cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+  { index = "pytorch-cu124", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 

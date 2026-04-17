@@ -58,21 +58,23 @@ def _get_dtype_str_to_torch_dtype() -> dict[str, torch.dtype]:
     """Lazily build dtype string to torch dtype mapping."""
     import torch
 
-    return {
+    mapping = {
         "float64": torch.float64,
         "float32": torch.float32,
         "float16": torch.float16,
         "bfloat16": torch.bfloat16,
         "float8_e4m3fn": torch.float8_e4m3fn,
         "float8_e5m2": torch.float8_e5m2,
-        "float4_e2m1": torch.float4_e2m1fn_x2,
-        "float4_e2m1fn_x2": torch.float4_e2m1fn_x2,
         "int64": torch.int64,
         "int32": torch.int32,
         "int16": torch.int16,
         "int8": torch.int8,
         "bool": torch.bool,
     }
+    if hasattr(torch, "float4_e2m1fn_x2"):
+        mapping["float4_e2m1"] = torch.float4_e2m1fn_x2
+        mapping["float4_e2m1fn_x2"] = torch.float4_e2m1fn_x2
+    return mapping
 
 
 def dtype_str_to_torch_dtype(dtype_str: str) -> torch.dtype:

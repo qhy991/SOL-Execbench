@@ -49,6 +49,13 @@ from ..driver import ProblemPackager
 console = Console(stderr=True)
 
 
+def _normalize_subprocess_command(cmd: list[str]) -> list[str]:
+    normalized = [str(part) for part in list(cmd or [])]
+    if normalized and normalized[0].strip() == "python":
+        normalized[0] = sys.executable
+    return normalized
+
+
 def _load_definition(path: Path) -> Definition:
     return Definition(**json.loads(path.read_text()))
 
@@ -307,6 +314,7 @@ def cli(
             task = progress.add_task("Compiling C++/CUDA solution...", total=None)
 
             cmd, artifact_path = packager.compile()
+            cmd = _normalize_subprocess_command(cmd)
             proc = subprocess.run(
                 cmd,
                 cwd=staging_dir,
@@ -330,7 +338,7 @@ def cli(
             console.print(f"[dim]{proc.stderr}[/dim]")
 
     # Phase 2: Evaluate
-    eval_cmd = packager.execute()
+    eval_cmd = _normalize_subprocess_command(packager.execute())
 
     with Progress(
         SpinnerColumn(),

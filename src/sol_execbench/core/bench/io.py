@@ -64,7 +64,7 @@ def _cast_to_fp4x2(x: torch.Tensor) -> torch.Tensor:
 
     # Pack two FP4 values into one byte along cols dimension
     packed = result[..., ::2] + result[..., 1::2] * 16
-    return packed.view(torch.float4_e2m1fn_x2)
+    return packed.view(getattr(torch, "float4_e2m1fn_x2"))
 
 
 def _rand_tensor(
@@ -77,7 +77,7 @@ def _rand_tensor(
     if dtype in (torch.float8_e4m3fn, torch.float8_e5m2):
         t = torch.randn(shape, dtype=torch.float32, device=device).clamp_(-2.0, 2.0)
         return t.to(dtype)
-    elif dtype == torch.float4_e2m1fn_x2:
+    elif hasattr(torch, "float4_e2m1fn_x2") and dtype == torch.float4_e2m1fn_x2:
         return _cast_to_fp4x2(torch.randn(shape, dtype=torch.float32, device=device))
 
     # booleans
@@ -235,7 +235,10 @@ def _generate_heuristic_tensor(
 
     # Low-precision floats (FP8, FP4) don't support ops like torch.randn/ones/empty.uniform_;
     # fall back to _rand_tensor() which generates in float32 then converts.
-    if dtype in (torch.float8_e4m3fn, torch.float8_e5m2, torch.float4_e2m1fn_x2):
+    _low_prec_dtypes = (torch.float8_e4m3fn, torch.float8_e5m2)
+    if hasattr(torch, "float4_e2m1fn_x2"):
+        _low_prec_dtypes = _low_prec_dtypes + (torch.float4_e2m1fn_x2,)
+    if dtype in _low_prec_dtypes:
         return None
 
     if _is_norm_weight(name):

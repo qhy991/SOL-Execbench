@@ -181,6 +181,13 @@ def _mark_example(case: Example) -> list:
     marks = [pytest.mark.xdist_group("serial")]
     for m in case.extra_markers:
         marks.append(getattr(pytest.mark, m))
+    # Skip cutlass-dsl tests when the optional dependency is not installed
+    if case.language in ("cutlass", "cute_dsl"):
+        import importlib
+        if not importlib.util.find_spec("cutlass"):
+            marks.append(
+                pytest.mark.skip(reason="nvidia-cutlass-dsl not installed (optional)")
+            )
     return marks
 
 

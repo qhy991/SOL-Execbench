@@ -25,6 +25,7 @@ import dataclasses
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from ..core import (
@@ -47,6 +48,25 @@ _CPP_LANGUAGES = {
 }
 
 _BLACKWELL_HARDWARE = {SupportedHardware.B200}
+
+# SM versions that require nvcc 12.8+.  Older toolchains will fatally
+# error on "Unsupported gpu architecture", so we filter them out at
+# injection time based on what the installed nvcc actually supports.
+_NVCC_HIGH_SM = {"sm_100", "sm_100a"}
+
+
+def _nvcc_supports_sm(sm: str) -> bool:
+    """Check whether the local nvcc can compile for *sm*."""
+    if sm not in _NVCC_HIGH_SM:
+        return True  # standard archs are always supported
+    try:
+        result = subprocess.run(
+            ["nvcc", "--list-gpu-arch"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return sm in result.stdout
+    except Exception:
+        return False
 
 
 def _get_local_sm() -> str | None:
@@ -134,11 +154,12 @@ class ProblemPackager:
         target_hw = {h.upper() for h in spec.get("target_hardware", [])}
 
         if any(h == hw.value for h in target_hw for hw in _BLACKWELL_HARDWARE):
-            gencode_sms.append("sm_100a")
+            if _nvcc_supports_sm("sm_100a"):
+                gencode_sms.append("sm_100a")
 
         if SupportedHardware.LOCAL.value in target_hw:
             local_sm = _get_local_sm()
-            if local_sm:
+            if local_sm and _nvcc_supports_sm(local_sm):
                 gencode_sms.append(local_sm)
 
         # Deduplicate preserving order
@@ -183,7 +204,7 @@ class ProblemPackager:
             (_TEMPLATES_DIR / "build_ext.py").read_text()
         )
 
-        cmd = ["python", "build_ext.py"]
+        cmd = [sys.executable, "build_ext.py"]
         artifact_path = str(self.output_dir / "benchmark_kernel.so")
 
         return cmd, artifact_path
@@ -211,7 +232,7 @@ class ProblemPackager:
             (_TEMPLATES_DIR / "eval_driver.py").read_text()
         )
 
-        return ["python", "eval_driver.py"]
+        return [sys.executable, "eval_driver.py"]
 
     def convert_stdout_to_traces(self, stdout: str) -> list[Trace]:
         """Parse JSONL stdout from eval_driver.py into Trace objects.

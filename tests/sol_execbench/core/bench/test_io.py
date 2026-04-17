@@ -96,6 +96,10 @@ class TestRandTensor:
 # ------------------------------------------------------------------
 
 
+@pytest.mark.skipif(
+    not hasattr(torch, "float4_e2m1fn_x2"),
+    reason="torch.float4_e2m1fn_x2 not available (requires PyTorch >= 2.10)",
+)
 class TestCastToFP4x2:
     def test_output_shape(self):
         x = torch.randn(4, 8)

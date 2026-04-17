@@ -306,6 +306,10 @@ def test_reward_hack_e2e(tmp_path: Path, case: EvilCase):
 
 
 @pytest.mark.xdist_group("serial")
+@pytest.mark.skipif(
+    not (Path(__file__).resolve().parent.parent.parent.parent / "data" / "flashinfer-trace").exists(),
+    reason="flashinfer-trace dataset not downloaded (run scripts/download_data.sh)",
+)
 def test_cli_gqa_paged_decode(tmp_path: Path):
     """CLI e2e: run sol-execbench on a GQA paged-decode problem with safetensors inputs."""
     sample_dir = _SAMPLES_DIR / "gqa_paged_decode"

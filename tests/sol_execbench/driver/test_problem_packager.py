@@ -17,6 +17,7 @@
 
 import ast
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -189,7 +190,7 @@ class TestCompile:
     ):
         pkg = _make_packager(tmp_path, definition, workloads, cuda_solution, config)
         cmd, artifact_path = pkg.compile()
-        assert cmd == ["python", "build_ext.py"]
+        assert cmd == [sys.executable, "build_ext.py"]
         assert artifact_path.endswith("benchmark_kernel.so")
 
     def test_build_ext_staged(
@@ -204,11 +205,17 @@ class TestCompile:
     def test_gencode_injected_for_blackwell(
         self, tmp_path, definition, workloads, cuda_solution, config
     ):
+        from sol_execbench.driver.problem_packager import _nvcc_supports_sm
+
         pkg = _make_packager(tmp_path, definition, workloads, cuda_solution, config)
         pkg.compile()
         sol = json.loads((pkg.output_dir / "solution.json").read_text())
-        cuda_cflags = sol["spec"]["compile_options"]["cuda_cflags"]
-        assert any("sm_100a" in f for f in cuda_cflags)
+        compile_opts = sol["spec"].get("compile_options") or {}
+        cuda_cflags = compile_opts.get("cuda_cflags", [])
+        if _nvcc_supports_sm("sm_100a"):
+            assert any("sm_100a" in f for f in cuda_cflags)
+        else:
+            assert not any("sm_100a" in f for f in cuda_cflags)
 
     def test_gencode_not_injected_when_explicit(
         self, tmp_path, definition, workloads, config
@@ -244,7 +251,7 @@ class TestExecute:
     ):
         pkg = _make_packager(tmp_path, definition, workloads, python_solution, config)
         cmd = pkg.execute()
-        assert cmd == ["python", "eval_driver.py"]
+        assert cmd == [sys.executable, "eval_driver.py"]
 
     def test_eval_driver_staged(
         self, tmp_path, definition, workloads, python_solution, config
@@ -269,7 +276,7 @@ class TestExecute:
         # Simulate a compiled artifact.
         (pkg.output_dir / "benchmark_kernel.so").write_bytes(b"\x00")
         cmd = pkg.execute()
-        assert cmd == ["python", "eval_driver.py"]
+        assert cmd == [sys.executable, "eval_driver.py"]
 
 
 # ── convert_stdout_to_traces() ────────────────────────────────────────────────
