@@ -75,7 +75,7 @@ sol-execbench examples/cute_dsl/jamba_attn_proj \
 | `--compile-timeout` | Compilation timeout in seconds (default: 120) |
 | `--timeout` | Evaluation timeout in seconds (default: 600) |
 | `-o, --output` | Write JSONL traces to file |
-| `--json` | Print traces as JSON to stdout |
+| `--json` / `--no-json` | Print traces as JSON to stdout (**default: `--json`**). Use `--no-json` for a Rich table. |
 | `--lock-clocks` | Lock GPU clocks for stable benchmarks |
 | `--keep-staging` | Preserve staging directory after run |
 | `-v, --verbose` | Show subprocess output |

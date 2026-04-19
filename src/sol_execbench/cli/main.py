@@ -18,6 +18,8 @@
 Usage:
     uv run sol-execbench <problem_dir> --solution solution.json
     uv run sol-execbench --definition def.json --workload wkl.jsonl --solution sol.json
+
+By default, traces are printed as one JSON object per line on stdout. Pass --no-json for a human-readable Rich table (on stderr).
 """
 
 from __future__ import annotations
@@ -228,7 +230,12 @@ def _print_traces_table(traces: list[Trace]) -> None:
     type=click.Path(path_type=Path),
     help="Write trace JSONL to this file",
 )
-@click.option("--json", "json_output", is_flag=True, help="Print trace JSON to stdout")
+@click.option(
+    "--json/--no-json",
+    "json_output",
+    default=True,
+    help="Print one JSON trace per line to stdout (default). Use --no-json for a Rich table on stderr.",
+)
 @click.option("--lock-clocks", is_flag=True, help="Require GPU clocks to be locked")
 @click.option(
     "--keep-staging", is_flag=True, help="Keep the staging directory after evaluation"
