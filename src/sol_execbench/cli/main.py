@@ -19,7 +19,9 @@ Usage:
     uv run sol-execbench <problem_dir> --solution solution.json
     uv run sol-execbench --definition def.json --workload wkl.jsonl --solution sol.json
 
-By default, traces are printed as one JSON object per line on stdout. Pass --no-json for a human-readable Rich table (on stderr).
+By default, traces are printed as one JSON object per line on stdout. Pass --no-json for a human-readable Rich table on stderr (success path only).
+
+If compilation or evaluation fails before traces exist, **one** JSON object is **always** written to stdout (and to ``-o`` when given) with ``parse_status`` set—this does not depend on ``--json`` / ``--no-json``, so callers always receive machine-readable errors on stdout.
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import click
 from rich.console import Console
@@ -49,6 +51,45 @@ from ..core import (
 from ..driver import ProblemPackager
 
 console = Console(stderr=True)
+
+# Cap embedded compiler logs in JSON error payloads (bytes-ish; UTF-8 safe slice may shorten).
+_MAX_DIAG_CHARS = 24000
+
+
+def _truncate_diag(text: str, max_chars: int = _MAX_DIAG_CHARS) -> str:
+    if not text:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "\n...[truncated]"
+
+
+def _emit_json_failure(
+    *,
+    parse_status: str,
+    phase: str,
+    problem: str,
+    solution: str,
+    output_file: Optional[Path],
+    fields: dict[str, Any],
+) -> None:
+    """Emit a single JSON object to stdout (and optionally -o) for agent/CI consumption.
+
+    Always prints to stdout so failure diagnostics are available even when ``--no-json``
+    is used for the success path.
+    """
+    payload: dict[str, Any] = {
+        "parse_status": parse_status,
+        "phase": phase,
+        "problem": problem,
+        "solution": solution,
+        **fields,
+    }
+    line = json.dumps(payload, ensure_ascii=False)
+    print(line, file=sys.stdout, flush=True)
+    if output_file is not None:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_text(line + "\n", encoding="utf-8")
 
 
 def _normalize_subprocess_command(cmd: list[str]) -> list[str]:
@@ -234,7 +275,7 @@ def _print_traces_table(traces: list[Trace]) -> None:
     "--json/--no-json",
     "json_output",
     default=True,
-    help="Print one JSON trace per line to stdout (default). Use --no-json for a Rich table on stderr.",
+    help="On success: print one JSON trace per line to stdout (default); --no-json prints a Rich table on stderr. On failure: one JSON error object is always printed to stdout (and to -o if set), regardless of this flag.",
 )
 @click.option("--lock-clocks", is_flag=True, help="Require GPU clocks to be locked")
 @click.option(
@@ -338,6 +379,19 @@ def cli(
                 console.print(proc.stderr)
             if proc.stdout:
                 console.print(proc.stdout)
+            _emit_json_failure(
+                parse_status="compilation_failed",
+                phase="compile",
+                problem=definition.name,
+                solution=solution.name,
+                output_file=output_file,
+                fields={
+                    "compiler_returncode": proc.returncode,
+                    "compiler_stderr": _truncate_diag(proc.stderr or ""),
+                    "compiler_stdout": _truncate_diag(proc.stdout or ""),
+                    "hint": "C++/CUDA extension build failed before evaluation. See compiler_stderr for ninja/nvcc errors.",
+                },
+            )
             sys.exit(1)
 
         console.print("[green]Compilation succeeded[/green]")
@@ -373,6 +427,18 @@ def cli(
         console.print("[red]Evaluation failed[/red]")
         if proc.stderr:
             console.print(proc.stderr)
+        _emit_json_failure(
+            parse_status="evaluation_failed",
+            phase="evaluate",
+            problem=definition.name,
+            solution=solution.name,
+            output_file=output_file,
+            fields={
+                "subprocess_returncode": proc.returncode,
+                "eval_stderr": _truncate_diag(proc.stderr or ""),
+                "hint": "Evaluation subprocess exited before emitting JSONL traces on stdout.",
+            },
+        )
         sys.exit(1)
 
     # Parse traces from stdout
@@ -382,6 +448,19 @@ def cli(
         console.print("[red]No traces produced[/red]")
         if proc.stderr:
             console.print(proc.stderr)
+        _emit_json_failure(
+            parse_status="no_traces",
+            phase="evaluate",
+            problem=definition.name,
+            solution=solution.name,
+            output_file=output_file,
+            fields={
+                "subprocess_returncode": proc.returncode,
+                "eval_stderr": _truncate_diag(proc.stderr or ""),
+                "eval_stdout_head": _truncate_diag(proc.stdout or ""),
+                "hint": "Could not parse evaluation stdout into Trace JSONL lines.",
+            },
+        )
         sys.exit(1)
 
     # Output
