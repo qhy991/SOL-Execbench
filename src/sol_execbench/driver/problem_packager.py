@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -48,6 +49,7 @@ _CPP_LANGUAGES = {
 }
 
 _BLACKWELL_HARDWARE = {SupportedHardware.B200}
+_DEFAULT_LOCAL_FATBIN_SMS = ("sm_80",)
 
 # SM versions that require nvcc 12.8+.  Older toolchains will fatally
 # error on "Unsupported gpu architecture", so we filter them out at
@@ -97,6 +99,18 @@ def _sm_to_gencode(sm: str) -> str:
     return f"-gencode=arch=compute_{arch},code={sm}"
 
 
+def _parse_extra_sms_from_env() -> list[str]:
+    """Parse optional extra SM targets from environment.
+
+    `SOL_EXECBENCH_EXTRA_SMS` accepts comma-separated values, e.g.:
+    "sm_80,sm_89".
+    """
+    raw = (os.environ.get("SOL_EXECBENCH_EXTRA_SMS") or "").strip()
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
 class ProblemPackager:
     """Stage files for compilation and execution, returning commands for the CLI."""
 
@@ -141,7 +155,10 @@ class ProblemPackager:
         """Auto-inject -gencode flags when no explicit arch flag is set.
 
         Blackwell targets get sm_100a (required for tcgen05/TMEM instructions).
-        LOCAL target detects the compile machine's GPU.
+        LOCAL target injects a small fatbin by default:
+        - baseline architecture(s) in `_DEFAULT_LOCAL_FATBIN_SMS`
+        - compile machine architecture from nvidia-smi
+        Extra architectures can be appended via `SOL_EXECBENCH_EXTRA_SMS`.
         """
         spec = sol_dict["spec"]
         compile_options = dict(spec.get("compile_options") or {})
@@ -158,11 +175,15 @@ class ProblemPackager:
                 gencode_sms.append("sm_100a")
 
         if SupportedHardware.LOCAL.value in target_hw:
+            gencode_sms.extend(_DEFAULT_LOCAL_FATBIN_SMS)
             local_sm = _get_local_sm()
             if local_sm and _nvcc_supports_sm(local_sm):
                 gencode_sms.append(local_sm)
+            gencode_sms.extend(_parse_extra_sms_from_env())
 
-        # Deduplicate preserving order
+        # Filter out unsupported SMs early, then deduplicate preserving order.
+        gencode_sms = [sm for sm in gencode_sms if _nvcc_supports_sm(sm)]
+
         seen: set[str] = set()
         unique = [s for s in gencode_sms if not (s in seen or seen.add(s))]
         if unique:

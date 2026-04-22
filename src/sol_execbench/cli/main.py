@@ -64,6 +64,49 @@ def _truncate_diag(text: str, max_chars: int = _MAX_DIAG_CHARS) -> str:
     return text[:max_chars] + "\n...[truncated]"
 
 
+def _extract_compiler_error_summary(text: str, max_lines: int = 32) -> str:
+    """Extract actionable compiler error lines from noisy build logs.
+
+    nvcc/g++/ninja errors are usually buried in the middle of the log.
+    This pulls the most diagnostic-critical lines (error:, fatal error,
+    undefined reference, etc.) so agents don't have to scroll through
+    thousands of lines of context.
+    """
+    if not text:
+        return ""
+    picked: list[str] = []
+    seen: set[str] = set()
+    for line in text.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        lower = s.lower()
+        hit = False
+        if "error:" in lower or "fatal error" in lower:
+            hit = True
+        elif "undefined reference" in lower:
+            hit = True
+        elif "collect2:" in lower and "error" in lower:
+            hit = True
+        elif "nvcc fatal" in lower:
+            hit = True
+        elif lower.startswith("ninja:") and ("error" in lower or "failed" in lower):
+            hit = True
+        elif "failed:" in lower and any(ext in lower for ext in (".cu", ".cpp", ".cc", ".cuh")):
+            hit = True
+        elif "note:" in lower and ("candidate" in lower or "declared" in lower):
+            hit = True
+        if not hit:
+            continue
+        clipped = s[:400]
+        if clipped not in seen:
+            seen.add(clipped)
+            picked.append(clipped)
+        if len(picked) >= max_lines:
+            break
+    return "\n".join(picked)
+
+
 def _emit_json_failure(
     *,
     parse_status: str,
@@ -389,7 +432,10 @@ def cli(
                     "compiler_returncode": proc.returncode,
                     "compiler_stderr": _truncate_diag(proc.stderr or ""),
                     "compiler_stdout": _truncate_diag(proc.stdout or ""),
-                    "hint": "C++/CUDA extension build failed before evaluation. See compiler_stderr for ninja/nvcc errors.",
+                    "compiler_error_summary": _extract_compiler_error_summary(
+                        (proc.stderr or "") + "\n" + (proc.stdout or "")
+                    ),
+                    "hint": "C++/CUDA extension build failed before evaluation. See compiler_error_summary for actionable lines, or compiler_stderr/compiler_stdout for full logs.",
                 },
             )
             sys.exit(1)
