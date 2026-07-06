@@ -44,9 +44,42 @@ from ..core import (
     BenchmarkConfig,
     EvaluationStatus,
 )
+from ..core.sol_reference import load_sol_reference, paper_sol_score
 from ..driver import ProblemPackager
 
 console = Console(stderr=True)
+
+
+def _enrich_traces_with_sol_score(traces: list[Trace]) -> int:
+    """Fill in t_sol_ms / t_base_ms / sol_score on PASSED traces whose
+    workload_uuid appears in the contest SOL reference table.
+
+    Returns the number of traces enriched. Non-contest workloads (uuid not
+    in the table) are left untouched — sol_score stays None.
+    """
+    table = load_sol_reference()
+    if table is None:
+        return 0
+    enriched = 0
+    for trace in traces:
+        ev = trace.evaluation
+        if ev is None or ev.status != EvaluationStatus.PASSED:
+            continue
+        if ev.performance is None:
+            continue
+        ref = table.get(trace.workload.uuid)
+        if ref is None:
+            continue
+        ev.performance.t_sol_ms = ref.t_sol_ms
+        ev.performance.t_base_ms = ref.t_base_ms
+        score = paper_sol_score(
+            ev.performance.latency_ms, ref.t_sol_ms, ref.t_base_ms
+        )
+        if score is not None:
+            ev.performance.sol_score = round(score, 6)
+        enriched += 1
+    return enriched
+
 
 
 def _load_definition(path: Path) -> Definition:
@@ -109,6 +142,7 @@ def _print_traces_table(traces: list[Trace]) -> None:
     table.add_column("Latency (ms)", justify="right", width=14)
     table.add_column("Ref (ms)", justify="right", width=14)
     table.add_column("Speedup", justify="right", width=10)
+    table.add_column("SOL Score", justify="right", width=10)
     table.add_column("Max Abs Err", justify="right", width=14)
     table.add_column("Max Rel Err", justify="right", width=14)
 
@@ -117,7 +151,7 @@ def _print_traces_table(traces: list[Trace]) -> None:
     for i, trace in enumerate(traces):
         ev = trace.evaluation
         if ev is None:
-            table.add_row(str(i), "[dim]no evaluation[/dim]", "", "", "", "", "")
+            table.add_row(str(i), "[dim]no evaluation[/dim]", "", "", "", "", "", "")
             continue
 
         status = ev.status.value
@@ -132,10 +166,20 @@ def _print_traces_table(traces: list[Trace]) -> None:
         latency = ""
         ref_latency = ""
         speedup = ""
+        sol_score = ""
         if ev.performance:
             latency = f"{ev.performance.latency_ms:.3f}"
             ref_latency = f"{ev.performance.reference_latency_ms:.3f}"
             speedup = f"{ev.performance.speedup_factor:.2f}x"
+            if ev.performance.sol_score is not None:
+                # Color: >=0.8 green, >=0.5 yellow, <0.5 red
+                s = ev.performance.sol_score
+                if s >= 0.8:
+                    sol_score = f"[green]{s:.4f}[/green]"
+                elif s >= 0.5:
+                    sol_score = f"[yellow]{s:.4f}[/yellow]"
+                else:
+                    sol_score = f"[red]{s:.4f}[/red]"
 
         abs_err = ""
         rel_err = ""
@@ -151,7 +195,8 @@ def _print_traces_table(traces: list[Trace]) -> None:
                 rel_err = f"{ev.correctness.max_relative_error:.2e}"
 
         table.add_row(
-            str(i), status_str, latency, ref_latency, speedup, abs_err, rel_err
+            str(i), status_str, latency, ref_latency, speedup, sol_score,
+            abs_err, rel_err
         )
 
     console.print(table)
@@ -368,6 +413,15 @@ def cli(
         if proc.stderr:
             console.print(proc.stderr)
         sys.exit(1)
+
+    # Enrich PASSED traces with SOL score for contest workloads.
+    # Non-contest workloads (uuid not in the SOL reference CSV) are skipped.
+    sol_enriched = _enrich_traces_with_sol_score(traces)
+    if sol_enriched > 0:
+        console.print(
+            f"[dim]Enriched {sol_enriched} trace(s) with SOL score from "
+            f"contest reference table.[/dim]"
+        )
 
     # Output
     if output_file:

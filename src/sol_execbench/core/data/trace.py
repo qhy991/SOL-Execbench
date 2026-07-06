@@ -68,6 +68,17 @@ class Performance(BaseModelWithDocstrings):
     """Reference implementation latency in milliseconds for comparison."""
     speedup_factor: float = Field(default=0.0, ge=0.0)
     """Performance speedup factor compared to reference (reference_time / solution_time)."""
+    t_sol_ms: Optional[float] = Field(default=None)
+    """Speed-of-Light latency for this workload (the theoretical best achievable on this GPU),
+    looked up from the contest's precomputed SOL reference table by workload_uuid.
+    Present only for contest workloads whose UUID appears in the SOL reference CSV."""
+    t_base_ms: Optional[float] = Field(default=None)
+    """Baseline (reference implementation) latency precomputed for this workload by the
+    contest organizers. Present only for contest workloads."""
+    sol_score: Optional[float] = Field(default=None)
+    """SOL-ExecBench Eq. (2) score in [0, 1]: S = 1 / (1 + (T_k - T_sol) / (T_base - T_sol)).
+    S=1 at T_k=T_sol (speed-of-light), S=0.5 at T_k=T_base (baseline reference).
+    Present only for contest workloads with both t_sol_ms and t_base_ms available."""
 
 
 class Environment(BaseModelWithDocstrings):
