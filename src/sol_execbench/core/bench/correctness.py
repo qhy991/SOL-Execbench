@@ -129,7 +129,7 @@ def compute_error_stats(
     exceeds_tol_mask = (abs_error > tol_bound) | ~torch.isfinite(abs_error)
     del tol_bound  # save VRAM
 
-    exceeds_count = float(exceeds_tol_mask.sum().item())
+    exceeds_count = float(torch.count_nonzero(exceeds_tol_mask).item())
     matched_ratio = 1.0 - (exceeds_count / float(total_elements))
     matched_ratio = max(0.0, min(1.0, matched_ratio))
 
